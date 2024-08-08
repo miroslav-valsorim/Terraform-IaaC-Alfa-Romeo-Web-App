@@ -1,0 +1,133 @@
+name: "Terraform Test ,Plan and Apply"
+
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+env:
+  AMR_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AMR_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AMR_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AMR_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+jobs:
+
+  terraform-test:
+
+    name: "Terraform Test"
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Checkout the repository to the GitHub Action Runner
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Install the latest verssion of the Terraform CLI
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      # Initialize terraform 
+      - name: Terraform Init
+        run: az login -u ${{ secrets.AZ_USERNAME }} -p ${{ secrets.AZ_PASSWORD }} && terraform init
+
+      # Format the file
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      # Validate terraform file
+      - name: Terraform Validate
+        run: terraform validate
+
+  terraform-plan:
+    name: "Terraform Plan"
+    runs-on: ubuntu-latest
+    needs: [ terraform-test ]
+
+    steps:
+
+      # Checkout the repository to the GitHub Action Runner
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Login to Azure via Azure CLI
+      - name: Login to Azure CLI
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Install the latest verssion of the Terraform CLI
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      # Initialize terraform 
+      - name: Terraform Init
+        run: az login -u ${{ secrets.AZ_USERNAME }} -p ${{ secrets.AZ_PASSWORD }} && terraform init
+
+      # Generate an execution plan for Terraform
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        env:
+          azurerm_postgresql_flexible_server_name: ${{secrets.TF_VAR_azurerm_postgresql_flexible_server_name}}
+          azurerm_postgresql_flexible_server_admin_login: ${{secrets.TF_VAR_azurerm_postgresql_flexible_server_admin_login}}
+          azurerm_postgresql_flexible_server_admin_password: ${{secrets.TF_VAR_azurerm_postgresql_flexible_server_admin_password}}
+          azurerm_postgresql_flexible_server_database_name: ${{secrets.TF_VAR_azurerm_postgresql_flexible_server_database_name}}
+          azurerm_linux_web_app_var_cloudinary_api_key: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_cloudinary_api_key }}
+          azurerm_linux_web_app_var_cloudinary_api_secret: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_cloudinary_api_secret }}
+          azurerm_linux_web_app_var_cloudinary_name: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_cloudinary_name }}
+          azurerm_linux_web_app_var_email_host_password: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_email_host_password }}
+          azurerm_linux_web_app_var_email_host_user: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_email_host_user }}
+          azurerm_linux_web_app_var_paypal_receiver_email: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_paypal_receiver_email }}
+          azurerm_linux_web_app_var_secret_key: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_secret_key }}
+
+      # Save plan to artifacts
+      - name: Save Terraform Plan
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan
+          path: tfplan
+
+  terraform-apply:
+
+    name: "Terraform Apply"
+    runs-on: ubuntu-latest
+    needs: [ terraform-plan ]
+
+    steps:
+
+      # Checkout the repository to the github Action Runner
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Install the latest verssion of the Terraform CLI
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      # Initialize terraform 
+      - name: Terraform Init 
+        run: az login -u ${{ secrets.AZ_USERNAME }} -p ${{ secrets.AZ_PASSWORD }} && terraform init
+
+      # Download saved plan from artifacts
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan
+          path: .
+
+      # Terraform Apply
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+        env:
+          azurerm_postgresql_flexible_server_name: ${{secrets.TF_VAR_azurerm_postgresql_flexible_server_name}}
+          azurerm_postgresql_flexible_server_admin_login: ${{secrets.TF_VAR_azurerm_postgresql_flexible_server_admin_login}}
+          azurerm_postgresql_flexible_server_admin_password: ${{secrets.TF_VAR_azurerm_postgresql_flexible_server_admin_password}}
+          azurerm_postgresql_flexible_server_database_name: ${{secrets.TF_VAR_azurerm_postgresql_flexible_server_database_name}}
+          azurerm_linux_web_app_var_cloudinary_api_key: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_cloudinary_api_key }}
+          azurerm_linux_web_app_var_cloudinary_api_secret: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_cloudinary_api_secret }}
+          azurerm_linux_web_app_var_cloudinary_name: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_cloudinary_name }}
+          azurerm_linux_web_app_var_email_host_password: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_email_host_password }}
+          azurerm_linux_web_app_var_email_host_user: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_email_host_user }}
+          azurerm_linux_web_app_var_paypal_receiver_email: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_paypal_receiver_email }}
+          azurerm_linux_web_app_var_secret_key: ${{ secrets.TF_VAR_azurerm_linux_web_app_var_secret_key }}
